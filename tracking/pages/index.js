@@ -9,6 +9,7 @@ import {
   CompleteShipment,
   GetShipment,
   StartShipment,
+  Assistant,
 } from "../Components/index";
 import { TrackingContext } from "../Conetxt/TrackingContext";
 
@@ -31,6 +32,7 @@ const index = () => {
   const [getModel, setGetModel] = useState(false);
   //DATA STATE VARIABLE
   const [allShipmentsdata, setallShipmentsdata] = useState();
+  const [aiDraft, setAiDraft] = useState(null);
 
   useEffect(() => {
     const getCampaignsData = getAllShipment();
@@ -58,6 +60,7 @@ const index = () => {
         createShipmentModel={createShipmentModel}
         createShipment={createShipment}
         setCreateShipmentModel={setCreateShipmentModel}
+        initialShipment={aiDraft}
       />
       <Profile
         openProfile={openProfile}
@@ -79,6 +82,12 @@ const index = () => {
         startModal={startModal}
         setStartModal={setStartModal}
         startShipment={startShipment}
+      />
+      <Assistant
+        onDraft={(draft) => {
+          setAiDraft(draft);
+          setCreateShipmentModel(true);
+        }}
       />
     </>
   );

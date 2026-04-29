@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default ({
   setCreateShipmentModel,
   createShipmentModel,
   createShipment,
+  initialShipment,
 }) => {
   const [shipment, setShipment] = useState({
     receiver: "",
@@ -11,6 +12,21 @@ export default ({
     distance: "",
     price: "",
   });
+
+  useEffect(() => {
+    if (createShipmentModel && initialShipment) {
+      setShipment({
+        receiver: initialShipment.receiver || "",
+        pickupTime: initialShipment.pickupTime || "",
+        distance:
+          initialShipment.distance != null
+            ? String(initialShipment.distance)
+            : "",
+        price:
+          initialShipment.price != null ? String(initialShipment.price) : "",
+      });
+    }
+  }, [createShipmentModel, initialShipment]);
 
   const createItem = async () => {
     try {
@@ -59,6 +75,7 @@ export default ({
                 <input
                   type="text"
                   placeholder="receiver"
+                  value={shipment.receiver}
                   className="w-full pl-5 pr-3 py-2 text-gray-500 bg-transparent outline-none border focus:border-indigo-600 shadow-sm rounded-lg"
                   onChange={(e) =>
                     setShipment({
@@ -72,6 +89,7 @@ export default ({
                 <input
                   type="date"
                   placeholder="pickupTime"
+                  value={shipment.pickupTime}
                   className="w-full pl-5 pr-3 py-2 text-gray-500 bg-transparent outline-none border focus:border-indigo-600 shadow-sm rounded-lg"
                   onChange={(e) =>
                     setShipment({
@@ -85,6 +103,7 @@ export default ({
                 <input
                   type="text"
                   placeholder="distance"
+                  value={shipment.distance}
                   className="w-full pl-5 pr-3 py-2 text-gray-500 bg-transparent outline-none border focus:border-indigo-600 shadow-sm rounded-lg"
                   onChange={(e) =>
                     setShipment({
@@ -98,6 +117,7 @@ export default ({
                 <input
                   type="text"
                   placeholder="price"
+                  value={shipment.price}
                   className="w-full pl-5 pr-3 py-2 text-gray-500 bg-transparent outline-none border focus:border-indigo-600 shadow-sm rounded-lg"
                   onChange={(e) =>
                     setShipment({

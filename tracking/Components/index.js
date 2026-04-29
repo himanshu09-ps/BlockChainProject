@@ -7,6 +7,7 @@ import Profile from "./Profile";
 import GetShipment from "./GetShipment";
 import CompleteShipment from "./CompleteShipment";
 import StartShipment from "./StartShipment";
+import Assistant from "./Assistant";
 //SVG
 import Nav1 from "./SVG/Nav1";
 import Nav2 from "./SVG/Nav2";
@@ -25,6 +26,7 @@ export {
   GetShipment,
   CompleteShipment,
   StartShipment,
+  Assistant,
   //SVG
   Nav1,
   Nav2,
