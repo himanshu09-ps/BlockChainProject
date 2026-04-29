@@ -1,10 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import {
+  summarize,
+  predictForShipment,
+  formatDate,
+} from "../lib/stats";
 
 export default ({
   setCreateShipmentModel,
   createShipmentModel,
   createShipment,
   initialShipment,
+  allShipmentsdata,
 }) => {
   const [shipment, setShipment] = useState({
     receiver: "",
@@ -27,6 +33,29 @@ export default ({
       });
     }
   }, [createShipmentModel, initialShipment]);
+
+  const stats = useMemo(
+    () => summarize(Array.isArray(allShipmentsdata) ? allShipmentsdata : []),
+    [allShipmentsdata]
+  );
+
+  const livePrediction = useMemo(() => {
+    const distance = parseFloat(shipment.distance);
+    const price = parseFloat(shipment.price);
+    const pickupSeconds = shipment.pickupTime
+      ? Math.floor(new Date(shipment.pickupTime).getTime() / 1000)
+      : 0;
+    if (!distance) return null;
+    return predictForShipment(
+      {
+        receiver: shipment.receiver,
+        distance,
+        price: Number.isFinite(price) ? price : 0,
+        pickupTime: pickupSeconds,
+      },
+      stats
+    );
+  }, [shipment, stats]);
 
   const createItem = async () => {
     try {
@@ -127,6 +156,42 @@ export default ({
                   }
                 />
               </div>
+
+              {livePrediction &&
+                (livePrediction.eta ||
+                  livePrediction.fair ||
+                  livePrediction.anomaly?.reasons?.length) && (
+                  <div className="mt-4 rounded-lg border border-indigo-100 bg-indigo-50/60 p-3 text-left text-xs text-gray-700">
+                    <div className="text-[10px] uppercase tracking-wider text-indigo-700 font-medium mb-1">
+                      AI prediction
+                    </div>
+                    {livePrediction.eta && (
+                      <div>
+                        Predicted delivery:{" "}
+                        <span className="font-medium">
+                          {formatDate(livePrediction.eta)}
+                        </span>{" "}
+                        <span className="text-gray-400">
+                          (n={stats.sampleSize})
+                        </span>
+                      </div>
+                    )}
+                    {livePrediction.fair && (
+                      <div>
+                        Fair price range:{" "}
+                        <span className="font-medium">
+                          {livePrediction.fair.lo.toFixed(4)} –{" "}
+                          {livePrediction.fair.hi.toFixed(4)} ETH
+                        </span>
+                      </div>
+                    )}
+                    {livePrediction.anomaly?.reasons?.length > 0 && (
+                      <div className="text-amber-700 mt-1">
+                        ⚠ {livePrediction.anomaly.reasons.join("; ")}
+                      </div>
+                    )}
+                  </div>
+                )}
 
               <button
                 onClick={() => createItem()}

@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { ethers } from "ethers";
+import {
+  summarize,
+  predictForShipment,
+  formatDate,
+} from "../lib/stats";
 
-export default function Assistant({ onDraft }) {
+export default function Assistant({ onDraft, allShipmentsdata }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
@@ -9,6 +14,7 @@ export default function Assistant({ onDraft }) {
   const [warnings, setWarnings] = useState([]);
   const [preview, setPreview] = useState(null);
   const [source, setSource] = useState("");
+  const [prediction, setPrediction] = useState(null);
 
   const validate = (draft) => {
     const w = [];
@@ -48,6 +54,26 @@ export default function Assistant({ onDraft }) {
       setPreview(draft);
       setWarnings(validate(draft));
       setSource(data.source || "");
+      try {
+        const stats = summarize(
+          Array.isArray(allShipmentsdata) ? allShipmentsdata : []
+        );
+        const pickupSeconds = draft.pickupTime
+          ? Math.floor(new Date(draft.pickupTime).getTime() / 1000)
+          : 0;
+        const p = predictForShipment(
+          {
+            receiver: draft.receiver,
+            distance: parseFloat(draft.distance) || 0,
+            price: parseFloat(draft.price) || 0,
+            pickupTime: pickupSeconds,
+          },
+          stats
+        );
+        setPrediction({ ...p, sampleSize: stats.sampleSize });
+      } catch {
+        setPrediction(null);
+      }
     } catch (e) {
       setError(e.message || "Could not draft shipment.");
     } finally {
@@ -63,6 +89,7 @@ export default function Assistant({ onDraft }) {
     setPreview(null);
     setWarnings([]);
     setError("");
+    setPrediction(null);
   };
 
   return (
@@ -140,6 +167,39 @@ export default function Assistant({ onDraft }) {
                   ))}
                 </ul>
               )}
+              {prediction &&
+                (prediction.eta ||
+                  prediction.fair ||
+                  prediction.anomaly?.reasons?.length) && (
+                  <div className="mt-3 pt-2 border-t border-gray-200 text-[11px]">
+                    <div className="text-gray-500 mb-1">AI prediction</div>
+                    {prediction.eta && (
+                      <div>
+                        ETA:{" "}
+                        <span className="font-medium">
+                          {formatDate(prediction.eta)}
+                        </span>{" "}
+                        <span className="text-gray-400">
+                          (n={prediction.sampleSize})
+                        </span>
+                      </div>
+                    )}
+                    {prediction.fair && (
+                      <div>
+                        Fair price:{" "}
+                        <span className="font-medium">
+                          {prediction.fair.lo.toFixed(4)} –{" "}
+                          {prediction.fair.hi.toFixed(4)} ETH
+                        </span>
+                      </div>
+                    )}
+                    {prediction.anomaly?.reasons?.length > 0 && (
+                      <div className="text-amber-700">
+                        ⚠ {prediction.anomaly.reasons.join("; ")}
+                      </div>
+                    )}
+                  </div>
+                )}
             </div>
           )}
 

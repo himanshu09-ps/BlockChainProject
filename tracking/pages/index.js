@@ -10,6 +10,7 @@ import {
   GetShipment,
   StartShipment,
   Assistant,
+  AIInsights,
 } from "../Components/index";
 import { TrackingContext } from "../Conetxt/TrackingContext";
 
@@ -35,11 +36,18 @@ const index = () => {
   const [aiDraft, setAiDraft] = useState(null);
 
   useEffect(() => {
-    const getCampaignsData = getAllShipment();
-
-    return async () => {
-      const allData = await getCampaignsData;
-      setallShipmentsdata(allData);
+    let cancelled = false;
+    (async () => {
+      try {
+        const allData = await getAllShipment();
+        if (!cancelled) setallShipmentsdata(allData || []);
+      } catch (err) {
+        console.error("getAllShipment failed", err);
+        if (!cancelled) setallShipmentsdata([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -52,6 +60,8 @@ const index = () => {
         setStartModal={setStartModal}
       />
 
+      <AIInsights allShipmentsdata={allShipmentsdata} />
+
       <Table
         setCreateShipmentModel={setCreateShipmentModel}
         allShipmentsdata={allShipmentsdata}
@@ -61,6 +71,7 @@ const index = () => {
         createShipment={createShipment}
         setCreateShipmentModel={setCreateShipmentModel}
         initialShipment={aiDraft}
+        allShipmentsdata={allShipmentsdata}
       />
       <Profile
         openProfile={openProfile}
@@ -84,6 +95,7 @@ const index = () => {
         startShipment={startShipment}
       />
       <Assistant
+        allShipmentsdata={allShipmentsdata}
         onDraft={(draft) => {
           setAiDraft(draft);
           setCreateShipmentModel(true);

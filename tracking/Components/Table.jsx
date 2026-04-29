@@ -1,3 +1,10 @@
+import { useMemo } from "react";
+import {
+  summarize,
+  predictForShipment,
+  formatDate,
+} from "../lib/stats";
+
 export default ({ setCreateShipmentModel, allShipmentsdata }) => {
   const converTime = (time) => {
     const newTime = new Date(time);
@@ -10,7 +17,19 @@ export default ({ setCreateShipmentModel, allShipmentsdata }) => {
     return dataTime;
   };
 
-  console.log(allShipmentsdata);
+  const stats = useMemo(
+    () => summarize(Array.isArray(allShipmentsdata) ? allShipmentsdata : []),
+    [allShipmentsdata]
+  );
+
+  const riskClass = (level) =>
+    ({
+      ok: "bg-green-100 text-green-700",
+      medium: "bg-amber-100 text-amber-700",
+      high: "bg-red-100 text-red-700",
+    }[level] || "bg-gray-100 text-gray-500");
+  const riskText = (level) =>
+    ({ ok: "OK", medium: "Review", high: "High" }[level] || "—");
 
   return (
     <div className="max-w-screen-xl mx-auto px-4 md:px-8">
@@ -46,41 +65,63 @@ export default ({ setCreateShipmentModel, allShipmentsdata }) => {
               <th className="py-3 px-6">Delivery Time</th>
               <th className="py-3 px-6">Paid</th>
               <th className="py-3 px-6">Status</th>
+              <th className="py-3 px-6">Predicted ETA</th>
+              <th className="py-3 px-6">Risk</th>
             </tr>
           </thead>
           <tbody className="text-gray-600 divide-y">
-            {allShipmentsdata?.map((shipment, idx) => (
-              <tr key={idx}>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {shipment.sender.slice(0, 15)}...
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {shipment.receiver.slice(0, 15)}...
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {converTime(shipment.pickupTime)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {shipment.distance} Km
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {shipment.price}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {shipment.deliveryTime}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {shipment.isPaid ? " Completed" : "Not Complete"}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  {shipment.status == 0
-                    ? "Pending"
-                    : shipment.status == 1
-                    ? "IN_TRANSIT"
-                    : "Delivered"}
-                </td>
-              </tr>
-            ))}
+            {allShipmentsdata?.map((shipment, idx) => {
+              const pred = predictForShipment(shipment, stats);
+              return (
+                <tr key={idx}>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {shipment.sender.slice(0, 15)}...
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {shipment.receiver.slice(0, 15)}...
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {converTime(shipment.pickupTime)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {shipment.distance} Km
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {shipment.price}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {shipment.deliveryTime}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {shipment.isPaid ? " Completed" : "Not Complete"}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {shipment.status == 0
+                      ? "Pending"
+                      : shipment.status == 1
+                      ? "IN_TRANSIT"
+                      : "Delivered"}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-indigo-700">
+                    {shipment.status === 2
+                      ? "—"
+                      : pred.eta
+                      ? formatDate(pred.eta)
+                      : "Not enough data"}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${riskClass(
+                        pred.anomaly?.level
+                      )}`}
+                      title={(pred.anomaly?.reasons || []).join("; ")}
+                    >
+                      {riskText(pred.anomaly?.level)}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
