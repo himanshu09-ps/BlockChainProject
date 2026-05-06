@@ -11,6 +11,9 @@ module.exports = {
     hardhat: {
       chainId: 1337,
     },
+    localhost: {
+      url: "http://127.0.0.1:8545",
+    },
 //   holesky: {
  //     url: NEXT_PUBLIC_POLYGON_MUMBAI_RPC,
    //  accounts: [`0x${NEXT_PUBLIC_PRIVATE_KEY}`],
