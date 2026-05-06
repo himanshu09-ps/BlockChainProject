@@ -20,7 +20,8 @@ export default ({
   });
 
   useEffect(() => {
-    if (createShipmentModel && initialShipment) {
+    if (!createShipmentModel) return;
+    if (initialShipment) {
       setShipment({
         receiver: initialShipment.receiver || "",
         pickupTime: initialShipment.pickupTime || "",
@@ -31,6 +32,8 @@ export default ({
         price:
           initialShipment.price != null ? String(initialShipment.price) : "",
       });
+    } else {
+      setShipment({ receiver: "", pickupTime: "", distance: "", price: "" });
     }
   }, [createShipmentModel, initialShipment]);
 

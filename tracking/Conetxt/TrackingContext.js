@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Web3Modal from "web3modal";
 import { ethers } from "ethers";
 
@@ -110,24 +110,26 @@ const networks = {
 };
 
 const changeNetwork = async ({ networkName }) => {
-  try {
-    if (!window.ethereum) throw new Error("No crypto wallet found");
-    await window.ethereum.request({
-      method: "wallet_addEthereumChain",
-      params: [
-        {
-          ...networks[networkName],
-        },
-      ],
-    });
-  } catch (err) {
-    console.log(err.message);
-  }
+  if (!window.ethereum) throw new Error("No crypto wallet found");
+  await window.ethereum.request({
+    method: "wallet_addEthereumChain",
+    params: [
+      {
+        ...networks[networkName],
+      },
+    ],
+  });
 };
 
 export const handleNetworkSwitch = async () => {
   const networkName = "localhost";
-  await changeNetwork({ networkName });
+  try {
+    await changeNetwork({ networkName });
+    return true;
+  } catch (err) {
+    console.error("[network] switch failed:", err);
+    return false;
+  }
 };
 //END  OF NETWORK-------
 
@@ -138,200 +140,206 @@ export const TrackingProvider = ({ children }) => {
   const DappName = "Product Tracking Dapp";
   const [currentUser, setCurrentUser] = useState("");
 
-  const createShipment = async (items) => {
-    console.log(items);
-    const { receiver, pickupTime, distance, price } = items;
-
+  // Returns the connected account address, or null if anything is off.
+  const checkIfWalletConnected = async () => {
     try {
-      const web3Modal = new Web3Modal();
-      const connection = await web3Modal.connect();
-      const provider = new ethers.providers.Web3Provider(connection);
-      const signer = provider.getSigner();
-      const contract = fetchContract(signer);
-      const createItem = await contract.createShipment(
-        receiver,
-        new Date(pickupTime).getTime(),
-        distance,
-        ethers.utils.parseUnits(price, 18),
-        {
-          value: ethers.utils.parseUnits(price, 18),
-        }
-      );
-      await createItem.wait();
-      console.log(createItem);
-      location.reload();
+      if (typeof window === "undefined" || !window.ethereum) {
+        console.warn("[wallet] MetaMask not installed");
+        return null;
+      }
+      await handleNetworkSwitch();
+      const accounts = await window.ethereum.request({
+        method: "eth_accounts",
+      });
+      if (accounts && accounts.length) {
+        setCurrentUser(accounts[0]);
+        return accounts[0];
+      }
+      return null;
     } catch (error) {
-      console.log("Some want wrong", error);
+      console.error("[wallet] checkIfWalletConnected failed:", error);
+      return null;
     }
+  };
+
+  const getSignerContract = async () => {
+    const web3Modal = new Web3Modal();
+    const connection = await web3Modal.connect();
+    const provider = new ethers.providers.Web3Provider(connection);
+    const signer = provider.getSigner();
+    return fetchContract(signer);
+  };
+
+  const getReadOnlyContract = async () => {
+    const web3Modal = new Web3Modal();
+    const connection = await web3Modal.connect();
+    const provider = new ethers.providers.Web3Provider(connection);
+    return fetchContract(provider);
+  };
+
+  const createShipment = async (items) => {
+    const { receiver, pickupTime, distance, price } = items || {};
+
+    if (!receiver || !ethers.utils.isAddress(receiver)) {
+      throw new Error("Invalid receiver address");
+    }
+    if (!pickupTime) {
+      throw new Error("Pickup time is required");
+    }
+    const distanceNum = Number(distance);
+    if (!Number.isFinite(distanceNum) || distanceNum <= 0) {
+      throw new Error("Distance must be a positive number");
+    }
+    const priceStr = String(price ?? "").trim();
+    if (!priceStr || Number.isNaN(Number(priceStr)) || Number(priceStr) <= 0) {
+      throw new Error("Price must be a positive number (in ETH)");
+    }
+
+    const address = await checkIfWalletConnected();
+    if (!address) throw new Error("Wallet not connected");
+
+    const contract = await getSignerContract();
+    const priceWei = ethers.utils.parseUnits(priceStr, 18);
+
+    const tx = await contract.createShipment(
+      receiver,
+      Math.floor(new Date(pickupTime).getTime() / 1000),
+      Math.floor(distanceNum),
+      priceWei,
+      { value: priceWei }
+    );
+    const receipt = await tx.wait();
+    console.log("[createShipment] mined", receipt.transactionHash);
+    return receipt;
   };
 
   const getAllShipment = async () => {
     try {
       const address = await checkIfWalletConnected();
-      if (address) {
-        const web3Modal = new Web3Modal();
-        const connection = await web3Modal.connect();
-        const provider = new ethers.providers.Web3Provider(connection);
-        const contract = fetchContract(provider);
+      if (!address) return [];
 
-        const shipments = await contract.getAllTransactions();
-        const allShipments = shipments.map((shipment) => ({
-          sender: shipment.sender,
-          receiver: shipment.receiver,
-          price: ethers.utils.formatEther(shipment.price.toString()),
-          pickupTime: shipment.pickupTime.toNumber(),
-          deliveryTime: shipment.deliveryTime.toNumber(),
-          distance: shipment.distance.toNumber(),
-          isPaid: shipment.isPaid,
-          status: shipment.status,
-        }));
+      const contract = await getReadOnlyContract();
+      const shipments = await contract.getAllTransactions();
 
-        return allShipments;
-      }
+      return shipments.map((shipment) => ({
+        sender: shipment.sender,
+        receiver: shipment.receiver,
+        price: ethers.utils.formatEther(shipment.price.toString()),
+        pickupTime: shipment.pickupTime.toNumber() * 1000,
+        deliveryTime: shipment.deliveryTime.toNumber() * 1000,
+        distance: shipment.distance.toNumber(),
+        isPaid: shipment.isPaid,
+        status: shipment.status,
+      }));
     } catch (error) {
-      console.log("error want, getting shipment");
+      console.error("[getAllShipment] failed:", error);
+      return [];
     }
   };
 
   const getShipmentsCount = async () => {
     try {
       const address = await checkIfWalletConnected();
-      if (address) {
-        const web3Modal = new Web3Modal();
-        const connection = await web3Modal.connect();
-        const provider = new ethers.providers.Web3Provider(connection);
+      if (!address) return 0;
 
-        const contract = fetchContract(provider);
-        const shipmentsCount = await contract.getShipmentsCount(accounts[0]);
-        return shipmentsCount.toNumber();
-      }
+      const contract = await getReadOnlyContract();
+      const shipmentsCount = await contract.getShipmentsCount(address);
+      return shipmentsCount.toNumber();
     } catch (error) {
-      console.log("error want, getting shipment");
+      console.error("[getShipmentsCount] failed:", error);
+      return 0;
     }
   };
 
   const completeShipment = async (completeShip) => {
-    const { recevier, index } = completeShip;
-    try {
-      const address = await checkIfWalletConnected();
-      if (address) {
-        const web3Modal = new Web3Modal();
-        const connection = await web3Modal.connect();
-        const provider = new ethers.providers.Web3Provider(connection);
-        const signer = provider.getSigner();
-        const contract = fetchContract(signer);
+    const { recevier, index } = completeShip || {};
 
-        const transaction = await contract.completeShipment(
-          address,
-          recevier,
-          index,
-          {
-            gasLimit: 300000,
-          }
-        );
-
-        await transaction.wait();
-        console.log(transaction);
-        location.reload();
-      }
-    } catch (error) {
-      console.log("wrong completeShipment", error);
+    if (!recevier || !ethers.utils.isAddress(recevier)) {
+      throw new Error("Invalid receiver address");
     }
+    const idx = Number(index);
+    if (!Number.isInteger(idx) || idx < 0) {
+      throw new Error("Invalid shipment index");
+    }
+
+    const address = await checkIfWalletConnected();
+    if (!address) throw new Error("Wallet not connected");
+
+    const contract = await getSignerContract();
+    const tx = await contract.completeShipment(address, recevier, idx, {
+      gasLimit: 300000,
+    });
+    const receipt = await tx.wait();
+    console.log("[completeShipment] mined", receipt.transactionHash);
+    return receipt;
   };
 
   const getShipment = async (index) => {
     try {
       const address = await checkIfWalletConnected();
+      if (!address) return null;
 
-      if (address) {
-        const web3Modal = new Web3Modal();
-        const connection = await web3Modal.connect();
-        const provider = new ethers.providers.Web3Provider(connection);
+      const contract = await getReadOnlyContract();
+      const shipment = await contract.getShipment(address, Number(index));
 
-        const contract = fetchContract(provider);
-        const shipment = await contract.getShipment(address, index * 1);
-
-        console.log(shipment);
-
-        const SingleShiplent = {
-          sender: shipment[0],
-          receiver: shipment[1],
-          pickupTime: shipment[2].toNumber(),
-          deliveryTime: shipment[3].toNumber(),
-          distance: shipment[4].toNumber(),
-          price: ethers.utils.formatEther(shipment[5].toString()),
-          status: shipment[6],
-          isPaid: shipment[7],
-        };
-
-        return SingleShiplent;
-      }
+      return {
+        sender: shipment[0],
+        receiver: shipment[1],
+        pickupTime: shipment[2].toNumber() * 1000,
+        deliveryTime: shipment[3].toNumber() * 1000,
+        distance: shipment[4].toNumber(),
+        price: ethers.utils.formatEther(shipment[5].toString()),
+        status: shipment[6],
+        isPaid: shipment[7],
+      };
     } catch (error) {
-      console.log("Sorry no chipment");
+      console.error("[getShipment] failed:", error);
+      return null;
     }
   };
 
   const startShipment = async (getProduct) => {
-    const { reveiver, index } = getProduct;
+    const { reveiver, index } = getProduct || {};
 
-    try {
-      const address = await checkIfWalletConnected();
-
-      if (address) {
-        const web3Modal = new Web3Modal();
-        const connection = await web3Modal.connect();
-        const provider = new ethers.providers.Web3Provider(connection);
-        const signer = provider.getSigner();
-        const contract = fetchContract(signer);
-        const shipment = await contract.startShipment(
-          address,
-          reveiver,
-          index * 1,
-          {
-            gasLimit: 300000,
-          }
-        );
-
-        await shipment.wait();
-        console.log(shipment);
-        location.reload();
-      }
-    } catch (error) {
-      console.log("Sorry no chipment", error);
+    if (!reveiver || !ethers.utils.isAddress(reveiver)) {
+      throw new Error("Invalid receiver address");
     }
-  };
-  //---CHECK WALLET CONNECTED
-  const checkIfWalletConnected = async () => {
-    try {
-      if (!window.ethereum) return "Install MetaMask";
-      const network = await handleNetworkSwitch();
-      const accounts = await window.ethereum.request({
-        method: "eth_accounts",
-      });
-
-      if (accounts.length) {
-        setCurrentUser(accounts[0]);
-        return accounts[0];
-      } else {
-        return "No account";
-      }
-    } catch (error) {
-      return "not connected";
+    const idx = Number(index);
+    if (!Number.isInteger(idx) || idx < 0) {
+      throw new Error("Invalid shipment index");
     }
+
+    const address = await checkIfWalletConnected();
+    if (!address) throw new Error("Wallet not connected");
+
+    const contract = await getSignerContract();
+    const tx = await contract.startShipment(address, reveiver, idx, {
+      gasLimit: 300000,
+    });
+    const receipt = await tx.wait();
+    console.log("[startShipment] mined", receipt.transactionHash);
+    return receipt;
   };
 
   //---CONNET WALLET FUNCTION
   const connectWallet = async () => {
     try {
-      if (!window.ethereum) return "Install MetaMask";
-      const network = await handleNetworkSwitch();
+      if (!window.ethereum) {
+        alert("Install MetaMask");
+        return null;
+      }
+      await handleNetworkSwitch();
       const accounts = await window.ethereum.request({
         method: "eth_requestAccounts",
       });
-
-      setCurrentUser(accounts[0]);
+      if (accounts && accounts.length) {
+        setCurrentUser(accounts[0]);
+        return accounts[0];
+      }
+      return null;
     } catch (error) {
-      return "Something want wrong";
+      console.error("[connectWallet] failed:", error);
+      return null;
     }
   };
 

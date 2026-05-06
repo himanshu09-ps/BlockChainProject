@@ -30,7 +30,13 @@ contract Tracking {
     }
 
     TyepShipment[] tyepShipments;
-    
+
+    // Maps (sender, per-sender index) -> global index in tyepShipments.
+    // Without this, per-sender indexes get incorrectly used to index the
+    // global array, causing the wrong record to be updated when multiple
+    // senders create shipments.
+    mapping(address => mapping(uint256 => uint256)) private senderIndexToGlobal;
+
 
     event ShipmentCreated(address indexed sender, address indexed receiver, uint256 pickupTime, uint256 distance, uint256 price);
     event ShipmentInTransit(address indexed sender, address indexed receiver, uint256 pickupTime);
@@ -43,32 +49,40 @@ contract Tracking {
 
      function createShipment(address _receiver, uint256 _pickupTime, uint256 _distance, uint256 _price) public payable {
         require(msg.value == _price, "Payment amount must match the price.");
-        
+
         Shipment memory shipment = Shipment(msg.sender, _receiver, _pickupTime, 0, _distance, _price, ShipmentStatus.PENDING, false);
+
+        uint256 senderIdx = shipments[msg.sender].length;
+        uint256 globalIdx = tyepShipments.length;
 
         shipments[msg.sender].push(shipment);
         shipmentCount++;
 
          tyepShipments.push(
             TyepShipment(
-                msg.sender, 
-                _receiver, 
-                _pickupTime, 
-                0, 
-                _distance, 
-                _price, 
-                ShipmentStatus.PENDING, 
+                msg.sender,
+                _receiver,
+                _pickupTime,
+                0,
+                _distance,
+                _price,
+                ShipmentStatus.PENDING,
                 false
             )
         );
-        
+
+        senderIndexToGlobal[msg.sender][senderIdx] = globalIdx;
+
         emit ShipmentCreated(msg.sender, _receiver, _pickupTime, _distance, _price);
     }
 
     function startShipment(address _sender, address _receiver, uint256 _index) public {
+        require(_index < shipments[_sender].length, "Invalid shipment index.");
+
         Shipment storage shipment = shipments[_sender][_index];
-        TyepShipment storage tyepShipment = tyepShipments[_index];
-        
+        uint256 globalIdx = senderIndexToGlobal[_sender][_index];
+        TyepShipment storage tyepShipment = tyepShipments[globalIdx];
+
         require(shipment.receiver == _receiver, "Invalid receiver.");
         require(shipment.status == ShipmentStatus.PENDING, "Shipment already in transit.");
 
@@ -79,8 +93,11 @@ contract Tracking {
     }
 
     function completeShipment(address _sender, address _receiver, uint256 _index) public {
+        require(_index < shipments[_sender].length, "Invalid shipment index.");
+
         Shipment storage shipment = shipments[_sender][_index];
-        TyepShipment storage tyepShipment = tyepShipments[_index];
+        uint256 globalIdx = senderIndexToGlobal[_sender][_index];
+        TyepShipment storage tyepShipment = tyepShipments[globalIdx];
 
         require(shipment.receiver == _receiver, "Invalid receiver.");
         require(shipment.status == ShipmentStatus.IN_TRANSIT, "Shipment not in transit.");
@@ -119,5 +136,5 @@ contract Tracking {
         return tyepShipments;
     }
 
-   
+
 }
