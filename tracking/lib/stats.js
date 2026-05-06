@@ -1,7 +1,7 @@
 // Pure-JS shipment analytics. Works in browser and Node.
 // Shipment shape (from getAllShipment):
-//   { sender, receiver, price: string ETH, pickupTime: number (s),
-//     deliveryTime: number (s), distance: number km, isPaid, status }
+//   { sender, receiver, price: string ETH, pickupTime: number (ms epoch),
+//     deliveryTime: number (ms epoch), distance: number km, isPaid, status }
 
 export const STATUS = { PENDING: 0, IN_TRANSIT: 1, DELIVERED: 2 };
 
@@ -61,14 +61,14 @@ export function summarize(shipments = []) {
   const deliveryDays = deliveredOnes
     .map(
       (s) =>
-        (toNumber(s.deliveryTime) - toNumber(s.pickupTime)) / 86400
+        (toNumber(s.deliveryTime) - toNumber(s.pickupTime)) / 86400000
     )
     .filter((x) => x > 0 && x < 365);
   const secondsPerKmArr = deliveredOnes
     .map((s) => {
       const d = toNumber(s.distance);
-      const t = toNumber(s.deliveryTime) - toNumber(s.pickupTime);
-      return d > 0 && t > 0 ? t / d : null;
+      const tSec = (toNumber(s.deliveryTime) - toNumber(s.pickupTime)) / 1000;
+      return d > 0 && tSec > 0 ? tSec / d : null;
     })
     .filter((x) => x != null && x > 0);
 
@@ -102,7 +102,7 @@ export function predictEta({ pickupTime, distance, secondsPerKm }) {
   const sp = toNumber(secondsPerKm);
   if (d <= 0 || sp <= 0) return null;
   const startMs =
-    toNumber(pickupTime) > 0 ? toNumber(pickupTime) * 1000 : Date.now();
+    toNumber(pickupTime) > 0 ? toNumber(pickupTime) : Date.now();
   return new Date(startMs + d * sp * 1000);
 }
 

@@ -45,8 +45,8 @@ export default ({
   const livePrediction = useMemo(() => {
     const distance = parseFloat(shipment.distance);
     const price = parseFloat(shipment.price);
-    const pickupSeconds = shipment.pickupTime
-      ? Math.floor(new Date(shipment.pickupTime).getTime() / 1000)
+    const pickupMs = shipment.pickupTime
+      ? new Date(shipment.pickupTime).getTime()
       : 0;
     if (!distance) return null;
     return predictForShipment(
@@ -54,7 +54,7 @@ export default ({
         receiver: shipment.receiver,
         distance,
         price: Number.isFinite(price) ? price : 0,
-        pickupTime: pickupSeconds,
+        pickupTime: pickupMs,
       },
       stats
     );

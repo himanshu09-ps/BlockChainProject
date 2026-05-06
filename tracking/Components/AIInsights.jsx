@@ -178,9 +178,7 @@ export default function AIInsights({ allShipmentsdata }) {
                     <td className="py-2 px-3">
                       {p.status === 2
                         ? formatDate(
-                            p.deliveryTime
-                              ? new Date(p.deliveryTime * 1000)
-                              : null
+                            p.deliveryTime ? new Date(p.deliveryTime) : null
                           )
                         : p.eta
                         ? formatDate(p.eta)

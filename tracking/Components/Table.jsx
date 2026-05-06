@@ -7,14 +7,15 @@ import {
 
 export default ({ setCreateShipmentModel, allShipmentsdata }) => {
   const converTime = (time) => {
-    const newTime = new Date(time);
-    const dataTime = new Intl.DateTimeFormat("en-US", {
+    const ms = Number(time);
+    if (!ms || !Number.isFinite(ms)) return "—";
+    const newTime = new Date(ms);
+    if (Number.isNaN(newTime.getTime())) return "—";
+    return new Intl.DateTimeFormat("en-US", {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
     }).format(newTime);
-
-    return dataTime;
   };
 
   const stats = useMemo(
@@ -90,7 +91,9 @@ export default ({ setCreateShipmentModel, allShipmentsdata }) => {
                     {shipment.price}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {shipment.deliveryTime}
+                    {shipment.deliveryTime
+                      ? converTime(shipment.deliveryTime)
+                      : "—"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {shipment.isPaid ? " Completed" : "Not Complete"}

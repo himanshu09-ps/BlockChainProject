@@ -58,15 +58,15 @@ export default function Assistant({ onDraft, allShipmentsdata }) {
         const stats = summarize(
           Array.isArray(allShipmentsdata) ? allShipmentsdata : []
         );
-        const pickupSeconds = draft.pickupTime
-          ? Math.floor(new Date(draft.pickupTime).getTime() / 1000)
+        const pickupMs = draft.pickupTime
+          ? new Date(draft.pickupTime).getTime()
           : 0;
         const p = predictForShipment(
           {
             receiver: draft.receiver,
             distance: parseFloat(draft.distance) || 0,
             price: parseFloat(draft.price) || 0,
-            pickupTime: pickupSeconds,
+            pickupTime: pickupMs,
           },
           stats
         );
